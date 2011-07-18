@@ -113,29 +113,41 @@
                   (let*
                     ((class (obj-dict-get root-dict 'class))
                     (parent-class-dict (class 'get-class-dict))
-                    (method (obj-dict-get (obj-dict-get parent-class-dict 'mtab) msg)))
-                  (apply method dispatcher args)))))))
+                    (method
+                      (obj-dict-get
+                        (obj-dict-get
+                          (obj-dict-get parent-class-dict 'mtab) class) msg)))
+                  (apply method dispatcher args)
+                  ))))))
     dispatcher))
 
 (define (obj-init-class-methods Class)
   (let 
-    ((mdef
-      (obj-dict-get (Class 'get-class-dict) 'mdefs))
-    (make-instance
-      (lambda (instance-class)   ;{"class"=X} <= X.Class."ivs"
-        (obj-dict-merge!
-          (obj-dict-init (list (cons 'class instance-class)))
-          (obj-dict-get (instance-class 'get-class-dict) 'ivs))))
+      ((mdef
+        (obj-dict-get (obj-dict-get (Class 'get-class-dict) 'mdefs) Class))
+      (make-instance
+        (lambda (obj)   ;{"class"=X} <= X.Class."ivs"
+          (let*
+            ((root-dict
+              (obj-dict-merge!
+                (obj-dict-init (list (cons 'class obj)))
+                (obj-dict-get (obj 'get-class-dict) 'ivs))) ;LAMb: will this work? What is the "class" key in this case?
+            (class-dict
+              (obj-dict-get root-dict obj)))
+            (obj-make-dispatcher root-dict class-dict))))
+      (get-class
+        (lambda (obj)
+          (obj-dict-get (obj 'get-root-dict) 'class)))
     )
     (obj-dict-set! mdef 'make-instance make-instance)
-  )
-)
+    (obj-dict-set! mdef 'get-class get-class)
+    ))
 
 (define (obj-init)
   (let* ((Class-Prototype
-          (obj-make-empty-class-dictionary))
+          (obj-make-dictionary))
         (Method-Defs
-          (obj-make-method-table))
+          (obj-make-dictionary))
         (Class-Dictionary
           (obj-dict-init (list
                           (cons 'ivdefs   Class-Prototype)
@@ -147,6 +159,8 @@
           (obj-make-dictionary))
         (Class
           (obj-make-dispatcher Root-Dictionary Class-Dictionary)))
+      (obj-dict-set! Class-Prototype Class (obj-make-empty-class-dictionary))
+      (obj-dict-set! Method-Defs Class (obj-make-method-table))
       (obj-dict-set! Root-Dictionary 'class Class)
       (obj-dict-set! Root-Dictionary Class Class-Dictionary)
       (obj-init-class-methods Class)
@@ -155,6 +169,6 @@
 
 
 (define Class (obj-init))
-;(define Object (car (table-ref (table-ref (Class 'get-root-dict) Class) 'parents)))
+(define Object (car (table-ref (table-ref (Class 'get-root-dict) Class) 'parents)))
 ;(define Object (car (Class 'get-parents)))
 
