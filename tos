@@ -1,0 +1,4 @@
+#!/bin/sh
+
+gsi ~~lib/syntax-case testeez.scm objective-scheme.scm test-objective-scheme.scm
+
