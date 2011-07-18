@@ -91,42 +91,51 @@
    d2)
   d1)
 
-;;; Define Class and Object which require a loop to define.
+;;; Define Class and Object which requires a self-reference to create.
 ;;; Class is a subclass of Object. Class is an instance of class.
 ;;; Object is an instance of Class.
 ;;; We require Class and Object to exist at the root of the MOP.
 (define (obj-make-empty-class-dictionary)
   (obj-dict-init (list
                   (cons 'ivdefs (obj-make-dictionary))
-                  (cons 'mdefs (obj-make-dictionary))
+                  (cons 'mdefs (obj-make-method-table))
                   (cons 'parents '())
                   (cons 'ivs (obj-make-dictionary))
-                  (cons 'mtab (obj-make-dictionary)))))
+                  (cons 'mtab (obj-make-method-table)))))
 
 (define (obj-make-dispatcher root-dict class-dict)
-  (letrec (
-          (get-method
-            (lambda (cls msg)
-              (obj-dict-get (obj-dict-get (cls 'get-class-dict) 'mtab) msg)))
-          (Object
+  (letrec ((dispatcher
             (lambda (msg . args)
-              (let ((method (get-method (obj-dict-get root-dict 'class) msg)))
-                (if (eq? method 'nil)
-                  (case msg
-                    ('get-root-dict root-dict)
-                    ('get-class-dict class-dict)
-                    ('get-class (obj-dict-get root-dict 'class))
-                    (else (error "UNDEFINED METHOD:" msg 'FOR Object)))
-                  (apply method Object args)))))
-          )
-    Object))
+              (case msg
+                ('get-class-dict class-dict)
+                ('get-root-dict root-dict)
+                (else
+                  (let*
+                    ((class (obj-dict-get root-dict 'class))
+                    (parent-class-dict (class 'get-class-dict))
+                    (method (obj-dict-get (obj-dict-get parent-class-dict 'mtab) msg)))
+                  (apply method dispatcher args)))))))
+    dispatcher))
+
+(define (obj-init-class-methods Class)
+  (let 
+    ((mdef
+      (obj-dict-get (Class 'get-class-dict) 'mdefs))
+    (make-instance
+      (lambda (instance-class)   ;{"class"=X} <= X.Class."ivs"
+        (obj-dict-merge!
+          (obj-dict-init (list (cons 'class instance-class)))
+          (obj-dict-get (instance-class 'get-class-dict) 'ivs))))
+    )
+    (obj-dict-set! mdef 'make-instance make-instance)
+  )
+)
 
 (define (obj-init)
-  (let* (
-        (Class-Prototype
+  (let* ((Class-Prototype
           (obj-make-empty-class-dictionary))
         (Method-Defs
-          (obj-make-dictionary))
+          (obj-make-method-table))
         (Class-Dictionary
           (obj-dict-init (list
                           (cons 'ivdefs   Class-Prototype)
@@ -134,28 +143,14 @@
                           (cons 'parents  '())
                           (cons 'mdefs    Method-Defs)
                           (cons 'mtab     Method-Defs))))
-        (make-instance
-          (lambda (class)
-            (let* ((parent-class-dict
-                    (obj-dict-get (class 'get-root-dict) class))
-                   (class-dict 
-                    (obj-dict-recursive-merge!
-                      (obj-make-dictionary) (obj-dict-get parent-class-dict 'ivs)))
-                  (root-dict
-                    (obj-dict-init (list
-                                    (cons 'class class)
-                                    (cons class class-dict)))))
-              (obj-make-dispatcher root-dict class-dict))))
-        (Root-Dictionary (obj-make-dictionary))
-        (Class (obj-make-dispatcher Root-Dictionary Class-Dictionary))
-        )
+        (Root-Dictionary
+          (obj-make-dictionary))
+        (Class
+          (obj-make-dispatcher Root-Dictionary Class-Dictionary)))
       (obj-dict-set! Root-Dictionary 'class Class)
       (obj-dict-set! Root-Dictionary Class Class-Dictionary)
-      (obj-dict-set! Class-Dictionary 'parents (list (make-instance Class)))
-      (obj-dict-set! Method-Defs 'make-instance make-instance)
-      (obj-dict-set! Method-Defs 'get-parents
-        (lambda (obj)
-          (obj-dict-get Class-Dictionary 'parents)))
+      (obj-init-class-methods Class)
+      (obj-dict-set! Class-Dictionary 'parents (list (Class 'make-instance)))
       Class))
 
 
