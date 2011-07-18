@@ -117,9 +117,37 @@
                       (obj-dict-get
                         (obj-dict-get
                           (obj-dict-get parent-class-dict 'mtab) class) msg)))
-                  (apply method dispatcher args)
-                  ))))))
+                  (apply method dispatcher args)))))))
     dispatcher))
+
+(define (obj-init-object-methods Object)
+  (let 
+      ((mdefs
+        (obj-dict-get (obj-dict-get (Object 'get-class-dict) 'mdefs) Object))
+      (mtab
+        (obj-dict-get (obj-dict-get (Object 'get-class-dict) 'mtab) Object))
+      (get-class
+        (lambda (obj)
+          (obj-dict-get (obj 'get-root-dict) 'class)))
+      (get-iv
+        (lambda (obj var)
+          (obj-dict-get (obj 'get-class-dict) var)))
+      (set-iv!
+        (lambda (obj var value)
+          (obj-dict-set! (obj 'get-class-dict) var value)))
+      (print-obj
+        (lambda (obj)
+          (obj-dict-print (obj 'get-root-dict))))
+      (get-parents
+        (lambda (obj)
+          (obj-dict-get (obj 'get-class-dict) 'parents)))
+    )
+    (obj-dict-set! mdefs 'get-iv get-iv)
+    (obj-dict-set! mdefs 'set-iv! set-iv!)
+    (obj-dict-set! mdefs 'print print-obj)
+    (obj-dict-set! mdefs 'get-class get-class)
+    (obj-dict-set! mdefs 'get-parents get-parents)
+    (obj-dict-merge! mtab mdefs)))
 
 (define (obj-init-class-methods Class)
   (let 
@@ -135,13 +163,9 @@
             (class-dict
               (obj-dict-get root-dict obj)))
             (obj-make-dispatcher root-dict class-dict))))
-      (get-class
-        (lambda (obj)
-          (obj-dict-get (obj 'get-root-dict) 'class)))
     )
     (obj-dict-set! mdef 'make-instance make-instance)
-    (obj-dict-set! mdef 'get-class get-class)
-    ))
+    (obj-init-object-methods Class)))
 
 (define (obj-init)
   (let* ((Class-Prototype
@@ -169,6 +193,6 @@
 
 
 (define Class (obj-init))
-(define Object (car (table-ref (table-ref (Class 'get-root-dict) Class) 'parents)))
-;(define Object (car (Class 'get-parents)))
+(define Object (Class 'get-parents))
+;(define Object (car (table-ref (table-ref (Class 'get-root-dict) Class) 'parents)))
 
